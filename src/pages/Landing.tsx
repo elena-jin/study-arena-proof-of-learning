@@ -24,7 +24,7 @@ const Landing = () => {
                         transition={{ duration: 0.5, delay: 0.1 }}
                         className="text-5xl md:text-7xl font-bold text-foreground mb-6 leading-tight"
                     >
-                        Turn Studying Into a <span className="text-brand-purple">Game.</span>
+                        Bet on your <span className="text-brand-purple">Brain.</span>
                     </motion.h1>
 
                     <motion.p
