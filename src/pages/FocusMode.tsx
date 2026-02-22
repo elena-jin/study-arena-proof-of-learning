@@ -5,6 +5,7 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import confetti from "canvas-confetti";
 import { supabase } from "../lib/supabase";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import SocialAccountability from "../components/SocialAccountability";
 
 const FocusMode = () => {
     const navigate = useNavigate();
@@ -99,6 +100,26 @@ const FocusMode = () => {
         return () => clearInterval(presageInterval);
     }, [isActive, isDistracted, focusScore]);
 
+    const triggerSocialShame = async (reason: string) => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const message = `${user.email?.split('@')[0] || 'Scholar'} lost their bet on ${questData?.questTitle || 'Calculus studies'}! Reason: ${reason}`;
+            const { error } = await supabase
+                .from('notifications')
+                .insert({
+                    user_id: user.id,
+                    message,
+                    type: 'shame'
+                });
+
+            if (error) console.error("Social shame failed:", error.message);
+        } catch (e) {
+            console.error("Shame trigger error:", e);
+        }
+    };
+
     const handleTimeUp = () => {
         setIsActive(false);
         setShowVerification(true);
@@ -122,17 +143,23 @@ const FocusMode = () => {
             const base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
 
             // Real Gemini Logic
-            const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_QUIZ_API_KEY);
+            const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GEMINI_QUIZ_API_KEY;
+            if (!apiKey) throw new Error("API Key missing");
+
+            const genAI = new GoogleGenerativeAI(apiKey);
             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-            const prompt = `Analyze this student's homework. They are supposed to be working on: ${questData?.questTitle || "Calculus"}. 
-            Check if:
-            1. The content matches the subject (${questData?.questTitle || "Calculus"}).
-            2. There is visible progress/effort.
+            const prompt = `You are a strict academic verification AI for StudyArena. 
+            Analyze this student's homework photo. They are supposed to be working on: ${questData?.questTitle || "Calculus/General Study"}. 
             
-            Respond with a JSON object strictly in this format: 
-            {"subject": "Detected Subject", "status": "verified" | "failed", "reason": "brief reason"}
-            Do not include any other text.`;
+            Verification Criteria:
+            1. Handwriting, diagrams, or text must be visible in the image.
+            2. Content should relate to ${questData?.questTitle || "General Study"}.
+            3. If it's a blank page or a non-educational image, fail it.
+            
+            You MUST respond ONLY with a raw JSON object in this exact format: 
+            {"subject": "Detected Subject", "status": "verified" | "failed", "reason": "3-word reason"}
+            Do not include markdowns, backticks, or any other text.`;
 
             const result = await model.generateContent([
                 prompt,
@@ -140,8 +167,11 @@ const FocusMode = () => {
             ]);
 
             const response = await result.response;
-            const text = response.text();
-            const geminiAnalysis = JSON.parse(text.replace(/```json|```/g, "").trim());
+            const text = response.text().trim();
+            // Robust JSON extraction
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            const cleanJson = jsonMatch ? jsonMatch[0] : text;
+            const geminiAnalysis = JSON.parse(cleanJson);
 
             if (geminiAnalysis.status === "verified") {
                 setVerificationResult('success');
@@ -180,11 +210,12 @@ const FocusMode = () => {
                 });
             } else {
                 setVerificationResult('failure');
+                triggerSocialShame(geminiAnalysis.reason || "Verification failed");
             }
         } catch (error) {
             console.error("Verification failed:", error);
-            // Fallback for demo if API/Camera fails - optional, but let's keep it failing for realism if user asked
             setVerificationResult('failure');
+            triggerSocialShame("Technical error during scan");
         } finally {
             setIsVerifying(false);
         }
@@ -197,7 +228,7 @@ const FocusMode = () => {
     };
 
     return (
-        <div className="min-h-screen bg-brand-purple flex flex-col items-center justify-center p-6 text-white text-center font-inter">
+        <div className="min-h-screen bg-brand-purple overflow-y-auto py-20 px-6 text-white text-center font-inter flex flex-col items-center">
             <header className="fixed top-6 left-6 right-6 flex items-center justify-between z-50">
                 <Link to="/dashboard" className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
                     <ArrowLeft className="w-6 h-6" />
@@ -208,35 +239,35 @@ const FocusMode = () => {
                 </div>
             </header>
 
-            <main className="space-y-12 max-w-md w-full relative">
+            <main className="space-y-8 max-w-md w-full relative pt-12">
                 {/* Predicted Reward Indicator */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute -top-24 left-1/2 -translate-x-1/2 w-full"
+                    className="absolute -top-12 left-1/2 -translate-x-1/2 w-full z-10"
                 >
-                    <div className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 bubbly-shadow">
-                        <Zap className="w-5 h-5 text-brand-neon fill-brand-neon" />
-                        <span className="text-sm font-black uppercase tracking-widest">Predicted Reward: {predictedReward} XP</span>
+                    <div className="inline-flex items-center gap-2 px-5 py-2 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 bubbly-shadow">
+                        <Zap className="w-4 h-4 text-brand-neon fill-brand-neon" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">Predicted Reward: {predictedReward} XP</span>
                     </div>
                 </motion.div>
 
                 {/* Timer Circle */}
-                <div className="relative w-72 h-72 mx-auto flex items-center justify-center">
+                <div className="relative w-64 h-64 mx-auto flex items-center justify-center">
                     <svg className="w-full h-full -rotate-90">
-                        <circle cx="144" cy="144" r="130" stroke="currentColor" strokeWidth="8" fill="none" className="text-white/10" />
+                        <circle cx="128" cy="128" r="115" stroke="currentColor" strokeWidth="8" fill="none" className="text-white/10" />
                         <motion.circle
-                            cx="144" cy="144" r="130" stroke="currentColor" strokeWidth="12" fill="none"
-                            strokeDasharray="816"
-                            initial={{ strokeDashoffset: 816 }}
-                            animate={{ strokeDashoffset: 816 - (816 * seconds) / (25 * 60) }}
+                            cx="128" cy="128" r="115" stroke="currentColor" strokeWidth="12" fill="none"
+                            strokeDasharray="722"
+                            initial={{ strokeDashoffset: 722 }}
+                            animate={{ strokeDashoffset: 722 - (722 * seconds) / (25 * 60) }}
                             className="text-white"
                             strokeLinecap="round"
                         />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-7xl font-black leading-none">{formatTime(seconds)}</span>
-                        <span className="text-sm font-bold uppercase tracking-widest opacity-60">Focusing Deeply</span>
+                        <span className="text-6xl font-black leading-none">{formatTime(seconds)}</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mt-2">Focus Session</span>
                     </div>
                 </div>
 
@@ -308,14 +339,20 @@ const FocusMode = () => {
                                     <span className="text-2xl font-black text-brand-neon">{xpMultiplier.toFixed(1)}x</span>
                                 </div>
                             </div>
+
+                            {/* Social Accountability System */}
+                            <SocialAccountability isDistracted={isDistracted} />
                         </motion.div>
                     ) : (
-                        <button
-                            onClick={() => setShowVerification(true)}
-                            className="w-full py-6 rounded-[2rem] bg-white text-brand-purple font-black text-xl bubbly-shadow hover:scale-105 active:scale-95 transition-all"
-                        >
-                            Verify Scan 📷
-                        </button>
+                        <div className="space-y-6">
+                            <button
+                                onClick={() => setShowVerification(true)}
+                                className="w-full py-6 rounded-[2rem] bg-white text-brand-purple font-black text-xl bubbly-shadow hover:scale-105 active:scale-95 transition-all"
+                            >
+                                Verify Scan 📷
+                            </button>
+                            <SocialAccountability isDistracted={false} />
+                        </div>
                     )}
                 </AnimatePresence>
 
@@ -414,36 +451,20 @@ const FocusMode = () => {
                     )}
                 </AnimatePresence>
 
-                {/* Distraction Alert */}
-                <AnimatePresence>
-                    {isDistracted && isActive && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-orange-500 text-white font-black bubbly-shadow animate-bounce"
-                        >
-                            <AlertCircle className="w-6 h-6" />
-                            GET BACK TO WORK! TIMER PAUSED
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
                 {/* Controls */}
-                <div className="flex items-center justify-center gap-6">
+                <div className="flex items-center justify-center gap-6 pt-4">
                     <button
                         onClick={() => { setSeconds(25 * 60); setIsActive(false); setIsDistracted(false); setVerificationResult(null); }}
                         className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-all bubbly-shadow"
                     >
-                        <RotateCcw className="w-8 h-8" />
+                        <RotateCcw className="w-6 h-6" />
                     </button>
                     <button
                         onClick={() => setIsActive(!isActive)}
-                        className={`w-24 h-24 rounded-full flex items-center justify-center bubbly-shadow transition-all ${isActive ? 'bg-white/20' : 'bg-white text-brand-purple'}`}
+                        className={`w-20 h-20 rounded-full flex items-center justify-center bubbly-shadow transition-all ${isActive ? 'bg-white/20' : 'bg-white text-brand-purple'}`}
                     >
-                        {isActive ? <Pause className="w-10 h-10 fill-current" /> : <Play className="w-10 h-10 fill-current ml-2" />}
+                        {isActive ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
                     </button>
-                    <div className="w-16" /> {/* Spacer */}
                 </div>
             </main>
         </div>
