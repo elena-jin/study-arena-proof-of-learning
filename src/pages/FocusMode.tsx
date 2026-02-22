@@ -6,6 +6,7 @@ import confetti from "canvas-confetti";
 import { supabase } from "../lib/supabase";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import SocialAccountability from "../components/SocialAccountability";
+import { presageService } from "../services/PresageService";
 
 const FocusMode = () => {
     const navigate = useNavigate();
@@ -17,6 +18,7 @@ const FocusMode = () => {
     const [focusScore, setFocusScore] = useState(95);
     const [isDistracted, setIsDistracted] = useState(false);
     const [xpMultiplier, setXpMultiplier] = useState(1.0);
+    const [vitals, setVitals] = useState({ pulse: 72, breathing: 16 });
 
     // Phase 3 & 6 Additions
     const [showVerification, setShowVerification] = useState(false);
@@ -62,8 +64,12 @@ const FocusMode = () => {
         if (isActive && seconds > 0 && !isDistracted) {
             interval = setInterval(() => {
                 setSeconds(prev => prev - 1);
-                // Simulate focus score fluctuations
-                setFocusScore(prev => Math.max(0, Math.min(100, prev + (Math.random() * 4 - 2))));
+
+                // Get Real Metrics from Presage SDK Abstraction
+                const metrics = presageService.getRealTimeMetrics();
+                setFocusScore(Math.floor(metrics.attention));
+                setIsDistracted(metrics.isDistracted);
+                setVitals(metrics.vitals || { pulse: 72, breathing: 16 });
 
                 // Presage SDK Simulated Reward Scaling
                 if (!questData) {
@@ -72,6 +78,12 @@ const FocusMode = () => {
                     const focusBonus = (focusScore / 100) * 50;
                     setPredictedReward(Math.floor(baseReward + timeBonus + focusBonus));
                 }
+
+                if (!metrics.isDistracted && metrics.attention > 80) {
+                    setXpMultiplier(prev => Math.min(3.0, prev + 0.1));
+                } else if (metrics.isDistracted) {
+                    setXpMultiplier(1.0);
+                }
             }, 1000);
         } else if (seconds === 0 && isActive) {
             handleTimeUp();
@@ -79,26 +91,14 @@ const FocusMode = () => {
         return () => clearInterval(interval);
     }, [isActive, seconds, isDistracted, focusScore, questData]);
 
-    // Simulated Presage Detection
+    // Initialize Presage
     useEffect(() => {
-        let presageInterval: any = null;
         if (isActive) {
-            presageInterval = setInterval(() => {
-                const chance = Math.random();
-                if (chance > 0.95) {
-                    setIsDistracted(true);
-                    setXpMultiplier(1.0);
-                } else if (chance < 0.1) {
-                    setIsDistracted(false);
-                }
-
-                if (!isDistracted && focusScore > 80) {
-                    setXpMultiplier(prev => Math.min(3.0, prev + 0.1));
-                }
-            }, 3000);
+            presageService.startTracking();
+        } else {
+            presageService.stopTracking();
         }
-        return () => clearInterval(presageInterval);
-    }, [isActive, isDistracted, focusScore]);
+    }, [isActive]);
 
     const triggerSocialShame = async (reason: string) => {
         try {
@@ -310,8 +310,9 @@ const FocusMode = () => {
                                                     seconds % 4 === 2 ? "Analyzing Proofs..." : "Verifying Intent..."}
                                         </p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-black text-white/40 tracking-tighter">0% LAG</p>
+                                    <div className="text-right space-y-1">
+                                        <p className="text-[8px] font-black text-brand-neon uppercase">Pulse: {vitals.pulse} BPM</p>
+                                        <p className="text-[8px] font-black text-white/40 uppercase tracking-tighter">Breath: {vitals.breathing} BPM</p>
                                     </div>
                                 </div>
 
