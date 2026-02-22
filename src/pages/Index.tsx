@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { VideoBrainrot } from "@/components/VideoBrainrot";
 import { Navbar } from "@/components/Navbar";
 import { PredictionCard } from "@/components/PredictionCard";
 import { LearningFeed } from "@/components/LearningFeed";
@@ -37,6 +38,12 @@ const Index = () => {
             </div>
 
             <div className="space-y-6">
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  Brainrot Study Stream
+                </h3>
+                <VideoBrainrot />
+              </div>
               <StreakDisplay />
               <button
                 onClick={() => setQuizOpen(true)}

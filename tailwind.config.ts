@@ -14,8 +14,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Space Grotesk", "system-ui", "sans-serif"],
+        sans: ["Fredoka", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
+        serif: ["Lora", "serif"],
+        display: ["Fraunces", "serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -23,6 +25,13 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        brand: {
+          purple: "#8B5CF6",
+          blue: "#3B82F6",
+          neon: "#22D3EE",
+          pink: "#F472B6",
+          green: "#10B981",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -50,13 +59,6 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
-        },
-        neon: {
-          cyan: "hsl(var(--neon-cyan))",
-          green: "hsl(var(--neon-green))",
-          orange: "hsl(var(--neon-orange))",
-          purple: "hsl(var(--neon-purple))",
-          pink: "hsl(var(--neon-pink))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
